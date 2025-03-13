@@ -4,6 +4,88 @@
 const handleListRules = require('./list');
 const handleCreateRule = require('./create');
 
+// Import getInboxRules for the edit sequence tool
+const { getInboxRules } = require('./list');
+
+/**
+ * Edit rule sequence handler
+ * @param {object} args - Tool arguments
+ * @returns {object} - MCP response
+ */
+async function handleEditRuleSequence(args) {
+  const { ruleName, sequence } = args;
+  
+  if (!ruleName) {
+    return {
+      content: [{ 
+        type: "text", 
+        text: "Rule name is required. Please specify the exact name of an existing rule."
+      }]
+    };
+  }
+  
+  if (!sequence || isNaN(sequence) || sequence < 1) {
+    return {
+      content: [{ 
+        type: "text", 
+        text: "A positive sequence number is required. Lower numbers run first (higher priority)."
+      }]
+    };
+  }
+  
+  try {
+    // Get access token
+    const accessToken = await ensureAuthenticated();
+    
+    // Get all rules
+    const rules = await getInboxRules(accessToken);
+    
+    // Find the rule by name
+    const rule = rules.find(r => r.displayName === ruleName);
+    if (!rule) {
+      return {
+        content: [{ 
+          type: "text", 
+          text: `Rule with name "${ruleName}" not found.`
+        }]
+      };
+    }
+    
+    // Update the rule sequence
+    const updateResult = await callGraphAPI(
+      accessToken,
+      'PATCH',
+      `me/mailFolders/inbox/messageRules/${rule.id}`,
+      {
+        sequence: sequence
+      }
+    );
+    
+    return {
+      content: [{ 
+        type: "text", 
+        text: `Successfully updated the sequence of rule "${ruleName}" to ${sequence}.`
+      }]
+    };
+  } catch (error) {
+    if (error.message === 'Authentication required') {
+      return {
+        content: [{ 
+          type: "text", 
+          text: "Authentication required. Please use the 'authenticate' tool first."
+        }]
+      };
+    }
+    
+    return {
+      content: [{ 
+        type: "text", 
+        text: `Error updating rule sequence: ${error.message}`
+      }]
+    };
+  }
+}
+
 // Rules management tool definitions
 const rulesTools = [
   {
@@ -54,16 +136,40 @@ const rulesTools = [
         isEnabled: {
           type: "boolean",
           description: "Whether the rule should be enabled after creation (default: true)"
+        },
+        sequence: {
+          type: "number",
+          description: "Order in which the rule is executed (lower numbers run first, default: 100)"
         }
       },
       required: ["name"]
     },
     handler: handleCreateRule
+  },
+  {
+    name: "edit-rule-sequence",
+    description: "Changes the execution order of an existing inbox rule",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleName: {
+          type: "string",
+          description: "Name of the rule to modify"
+        },
+        sequence: {
+          type: "number",
+          description: "New sequence value for the rule (lower numbers run first)"
+        }
+      },
+      required: ["ruleName", "sequence"]
+    },
+    handler: handleEditRuleSequence
   }
 ];
 
 module.exports = {
   rulesTools,
   handleListRules,
-  handleCreateRule
+  handleCreateRule,
+  handleEditRuleSequence
 };

@@ -76,20 +76,20 @@ async function getInboxRules(accessToken) {
  */
 function formatRulesList(rules, includeDetails) {
   if (!rules || rules.length === 0) {
-    return "No inbox rules found.";
+    return "No inbox rules found.\n\nTip: You can create rules using the 'create-rule' tool. Rules are processed in order of their sequence number (lower numbers are processed first).";
   }
   
-  // Sort rules by displayName
+  // Sort rules by sequence to show execution order
   const sortedRules = [...rules].sort((a, b) => {
-    return a.displayName.localeCompare(b.displayName);
+    return (a.sequence || 9999) - (b.sequence || 9999);
   });
   
   // Format rules based on detail level
   if (includeDetails) {
     // Detailed format
     const detailedRules = sortedRules.map((rule, index) => {
-      // Format rule header
-      let ruleText = `${index + 1}. ${rule.displayName}${rule.isEnabled ? '' : ' (Disabled)'}`;
+      // Format rule header with sequence
+      let ruleText = `${index + 1}. ${rule.displayName}${rule.isEnabled ? '' : ' (Disabled)'} - Sequence: ${rule.sequence || 'N/A'}`;
       
       // Format conditions
       const conditions = formatRuleConditions(rule);
@@ -106,14 +106,14 @@ function formatRulesList(rules, includeDetails) {
       return ruleText;
     });
     
-    return `Found ${rules.length} inbox rules:\n\n${detailedRules.join('\n\n')}`;
+    return `Found ${rules.length} inbox rules (sorted by execution order):\n\n${detailedRules.join('\n\n')}\n\nRules are processed in order of their sequence number. You can change rule order using the 'edit-rule-sequence' tool.`;
   } else {
     // Simple format
     const simpleRules = sortedRules.map((rule, index) => {
-      return `${index + 1}. ${rule.displayName}${rule.isEnabled ? '' : ' (Disabled)'}`;
+      return `${index + 1}. ${rule.displayName}${rule.isEnabled ? '' : ' (Disabled)'} - Sequence: ${rule.sequence || 'N/A'}`;
     });
     
-    return `Found ${rules.length} inbox rules:\n\n${simpleRules.join('\n')}`;
+    return `Found ${rules.length} inbox rules (sorted by execution order):\n\n${simpleRules.join('\n')}\n\nTip: Use 'list-rules with includeDetails=true' to see more information about each rule.`;
   }
 }
 
@@ -196,4 +196,7 @@ function formatRuleActions(rule) {
   return actions.join('; ');
 }
 
-module.exports = handleListRules;
+module.exports = {
+  handleListRules,
+  getInboxRules
+};

@@ -4,6 +4,7 @@
 const { callGraphAPI } = require('../utils/graph-api');
 const { ensureAuthenticated } = require('../auth');
 const { getFolderIdByName } = require('../email/folder-utils');
+const { getInboxRules } = require('./list');
 
 /**
  * Create rule handler
@@ -18,8 +19,19 @@ async function handleCreateRule(args) {
     hasAttachments,
     moveToFolder,
     markAsRead,
-    isEnabled = true
+    isEnabled = true,
+    sequence
   } = args;
+  
+  // Add validation for sequence parameter
+  if (sequence !== undefined && (isNaN(sequence) || sequence < 1)) {
+    return {
+      content: [{ 
+        type: "text", 
+        text: "Sequence must be a positive number greater than zero."
+      }]
+    };
+  }
   
   if (!name) {
     return {
@@ -64,13 +76,21 @@ async function handleCreateRule(args) {
       hasAttachments,
       moveToFolder,
       markAsRead,
-      isEnabled
+      isEnabled,
+      sequence
     });
+    
+    let responseText = result.message;
+    
+    // Add a tip about sequence if it wasn't provided
+    if (!sequence && !result.error) {
+      responseText += "\n\nTip: You can specify a 'sequence' parameter when creating rules to control their execution order. Lower sequence numbers run first.";
+    }
     
     return {
       content: [{ 
         type: "text", 
-        text: result.message
+        text: responseText
       }]
     };
   } catch (error) {
@@ -107,13 +127,43 @@ async function createInboxRule(accessToken, ruleOptions) {
       hasAttachments,
       moveToFolder,
       markAsRead,
-      isEnabled
+      isEnabled,
+      sequence
     } = ruleOptions;
     
-    // Build rule object
+    // Get existing rules to determine sequence if not provided
+    let ruleSequence = sequence;
+    if (!ruleSequence) {
+      try {
+        // Default to 100 if we can't get existing rules
+        ruleSequence = 100;
+        
+        // Get existing rules to find highest sequence
+        const existingRules = await getInboxRules(accessToken);
+        if (existingRules && existingRules.length > 0) {
+          // Find the highest sequence
+          const highestSequence = Math.max(...existingRules.map(r => r.sequence || 0));
+          // Set new rule sequence to be higher
+          ruleSequence = Math.max(highestSequence + 1, 100);
+          console.error(`Auto-generated sequence: ${ruleSequence} (based on highest existing: ${highestSequence})`);
+        }
+      } catch (sequenceError) {
+        console.error(`Error determining rule sequence: ${sequenceError.message}`);
+        // Fall back to default value
+        ruleSequence = 100;
+      }
+    }
+    
+    console.error(`Using rule sequence: ${ruleSequence}`);
+    
+    // Make sure sequence is a positive integer
+    ruleSequence = Math.max(1, Math.floor(ruleSequence));
+    
+    // Build rule object with sequence
     const rule = {
       displayName: name,
       isEnabled: isEnabled === true,
+      sequence: ruleSequence,
       conditions: {},
       actions: {}
     };
@@ -180,7 +230,7 @@ async function createInboxRule(accessToken, ruleOptions) {
     if (response && response.id) {
       return {
         success: true,
-        message: `Successfully created rule "${name}".`,
+        message: `Successfully created rule "${name}" with sequence ${ruleSequence}.`,
         ruleId: response.id
       };
     } else {
