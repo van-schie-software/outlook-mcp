@@ -15,6 +15,12 @@ This is a modular implementation of the Outlook MCP (Model Context Protocol) ser
 ├── calendar/                # Calendar functionality
 │   ├── index.js             # Calendar exports
 │   ├── list.js              # List events
+│   ├── create.js            # Create event
+│   ├── delete.js            # Delete event
+│   ├── cancel.js            # Cancel
+│   ├── accept.js            # Accept event
+│   ├── tentative.js         # Tentatively accept event
+│   ├── decline.js           # Decline event
 ├── email/                   # Email functionality
 │   ├── index.js             # Email exports
 │   ├── list.js              # List emails
