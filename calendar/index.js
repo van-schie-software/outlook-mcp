@@ -105,11 +105,11 @@ const calendarTools = [
         eventId: {
           type: "string",
           description: "The ID of the event to delete"
-      }
+        }
+      },
+      required: ["eventId"]
     },
-    required: ["eventId"]
-  },
-  handler: handleDeleteEvent
+    handler: handleDeleteEvent
   }
 ];
 

@@ -2,6 +2,10 @@
  * Configuration for Outlook MCP Server
  */
 const path = require('path');
+const os = require('os');
+
+// Ensure we have a home directory path even if process.env.HOME is undefined
+const homeDir = process.env.HOME || process.env.USERPROFILE || os.homedir() || '/tmp';
 
 module.exports = {
   // Server information
@@ -16,8 +20,8 @@ module.exports = {
     clientId: process.env.OUTLOOK_CLIENT_ID || '',
     clientSecret: process.env.OUTLOOK_CLIENT_SECRET || '',
     redirectUri: 'http://localhost:3333/auth/callback',
-    scopes: ['Mail.Read', 'Mail.ReadWrite', 'Mail.Send', 'User.Read'],
-    tokenStorePath: process.env.HOME ? path.join(process.env.HOME, '.outlook-mcp-tokens.json') : path.join(process.env.USERPROFILE, '.outlook-mcp-tokens.json'),
+    scopes: ['Mail.Read', 'Mail.ReadWrite', 'Mail.Send', 'User.Read', 'Calendars.Read', 'Calendars.ReadWrite'],
+    tokenStorePath: path.join(homeDir, '.outlook-mcp-tokens.json'),
     authServerUrl: 'http://localhost:3333'
   },
   
@@ -30,6 +34,9 @@ module.exports = {
   // Email constants
   EMAIL_SELECT_FIELDS: 'id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,importance,isRead',
   EMAIL_DETAIL_FIELDS: 'id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance,isRead,internetMessageHeaders',
+  
+  // Calendar constants
+  CALENDAR_SELECT_FIELDS: 'id,subject,bodyPreview,start,end,location,organizer,attendees,isAllDay,isCancelled',
   
   // Pagination
   DEFAULT_PAGE_SIZE: 25,

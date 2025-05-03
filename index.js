@@ -27,7 +27,7 @@ const TOOLS = [
   ...emailTools,
   ...folderTools,
   ...rulesTools
-  // Future modules: calendarTools, contactsTools, etc.
+  // Future modules: contactsTools, etc.
 ];
 
 // Create server with tools capabilities
