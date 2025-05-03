@@ -46,7 +46,7 @@ async function handleListEvents(args) {
       const endDate = new Date(event.end.dateTime).toLocaleString(event.end.timeZone);
       const location = event.location.displayName || 'No location';
       
-      return `${index + 1}. ${event.subject} - Location: ${location}\nStart: ${startDate}\nEnd: ${endDate}\nSummary: ${event.bodyPreview}\nID: ${event.id}\n`;
+      return `${index + 1}. ${event.subject} - Location: ${location}\nStart: ${startDate}\nEnd: ${endDate}\nSubject: ${event.subject}\nSummary: ${event.bodyPreview}\nID: ${event.id}\n`;
     }).join("\n");
     
     return {
@@ -74,4 +74,4 @@ async function handleListEvents(args) {
   }
 }
 
-module.exports = handleListEvents; 
+module.exports = handleListEvents;
