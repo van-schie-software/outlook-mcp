@@ -2,6 +2,10 @@
  * Configuration for Outlook MCP Server
  */
 const path = require('path');
+const os = require('os');
+
+// Ensure we have a home directory path even if process.env.HOME is undefined
+const homeDir = process.env.HOME || process.env.USERPROFILE || os.homedir() || '/tmp';
 
 module.exports = {
   // Server information
@@ -17,7 +21,7 @@ module.exports = {
     clientSecret: process.env.OUTLOOK_CLIENT_SECRET || '',
     redirectUri: 'http://localhost:3333/auth/callback',
     scopes: ['Mail.Read', 'Mail.ReadWrite', 'Mail.Send', 'User.Read', 'Calendars.Read', 'Calendars.ReadWrite'],
-    tokenStorePath: process.env.HOME ? path.join(process.env.HOME, '.outlook-mcp-tokens.json') : path.join(process.env.USERPROFILE, '.outlook-mcp-tokens.json'),
+    tokenStorePath: path.join(homeDir, '.outlook-mcp-tokens.json'),
     authServerUrl: 'http://localhost:3333'
   },
   
