@@ -11,6 +11,7 @@ const config = require('./config');
 
 // Import module tools
 const { authTools } = require('./auth');
+const { calendarTools } = require('./calendar');
 const { emailTools } = require('./email');
 const { folderTools } = require('./folder');
 const { rulesTools } = require('./rules');
@@ -22,6 +23,7 @@ console.error(`Test mode is ${config.USE_TEST_MODE ? 'enabled' : 'disabled'}`);
 // Combine all tools
 const TOOLS = [
   ...authTools,
+  ...calendarTools,
   ...emailTools,
   ...folderTools,
   ...rulesTools
