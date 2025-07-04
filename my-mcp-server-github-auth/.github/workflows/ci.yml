@@ -1,0 +1,35 @@
+# Naam van de workflow, zichtbaar in de 'Actions' tab van GitHub
+name: Continuous Integration
+
+# Bepaalt wanneer deze workflow moet draaien
+on:
+  # Draai de workflow bij elke Pull Request die gericht is op de 'main' branch
+  pull_request:
+    branches: [ main ]
+
+# Definieert de taken (jobs) die uitgevoerd moeten worden
+jobs:
+  # We definiëren één job genaamd 'test'
+  test:
+    # Specificeert op welk type machine de job moet draaien
+    runs-on: ubuntu-latest
+
+    # De stappen die binnen de 'test' job worden uitgevoerd
+    steps:
+      # Stap 1: Haal de code van de repository op
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Stap 2: Zet de juiste Node.js versie klaar
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Gebruik een versie die compatibel is met ons project
+
+      # Stap 3: Installeer alle project dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Stap 4: Voer de tests uit met het script uit package.json
+      - name: Run tests
+        run: npm test
