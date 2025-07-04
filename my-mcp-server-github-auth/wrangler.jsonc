@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "outlook-mcp-github-auth",
+	"name": "zendesk-mcp-server",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-03-10",
 	"compatibility_flags": [
@@ -60,7 +60,7 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-		"GITHUB_OAUTH_REDIRECT_URL": "https://outlook-mcp-github-auth.vanschie-joost.workers.dev/auth/github/callback"
+		"GITHUB_OAUTH_REDIRECT_URL": "https://zendesk-mcp-server.vanschie-joost.workers.dev/auth/github/callback"
 	},
 	/**
 	 * Note: Use secrets to store sensitive data.
@@ -69,10 +69,16 @@
 	 * Required secrets (set with wrangler secret put):
 	 * - GITHUB_CLIENT_ID: Your GitHub OAuth App Client ID
 	 * - GITHUB_CLIENT_SECRET: Your GitHub OAuth App Client Secret
+	 * - ZENDESK_SUBDOMAIN: Your Zendesk subdomain
+	 * - ZENDESK_EMAIL: Your Zendesk email
+	 * - ZENDESK_API_KEY: Your Zendesk API key
 	 * 
 	 * To set secrets:
-	 * wrangler secret put GITHUB_CLIENT_ID --name outlook-mcp-github-auth
-	 * wrangler secret put GITHUB_CLIENT_SECRET --name outlook-mcp-github-auth
+	 * wrangler secret put GITHUB_CLIENT_ID
+	 * wrangler secret put GITHUB_CLIENT_SECRET
+	 * wrangler secret put ZENDESK_SUBDOMAIN
+	 * wrangler secret put ZENDESK_EMAIL
+	 * wrangler secret put ZENDESK_API_KEY
 	 */
 
 	/**
@@ -86,4 +92,23 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+
+	/**
+	 * Environments Configuration
+	 * For staging and production deployments
+	 */
+	"environments": {
+		"staging": {
+			"name": "zendesk-mcp-server-staging",
+			"vars": {
+				"GITHUB_OAUTH_REDIRECT_URL": "https://zendesk-mcp-server-staging.vanschie-joost.workers.dev/auth/github/callback"
+			},
+			"kv_namespaces": [
+				{
+					"binding": "OAUTH_KV",
+					"id": "staging_kv_namespace_id_here"
+				}
+			]
+		}
+	}
 }
