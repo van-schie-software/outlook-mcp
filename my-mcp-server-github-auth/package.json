@@ -8,7 +8,9 @@
     "start": "wrangler dev",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
-    "test": "echo \"No tests configured yet\" && exit 0"
+    "test": "vitest run",
+    "test:integration": "vitest run src/index.test.ts",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.0.5",
@@ -16,14 +18,18 @@
     "agents": "^0.0.100",
     "hono": "^4.8.3",
     "just-pick": "^4.2.0",
+    "node-zendesk": "^6.0.1",
     "octokit": "^5.0.3",
     "workers-mcp": "^0.0.13",
     "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",
+    "@vitest/ui": "^3.2.4",
+    "happy-dom": "^18.0.1",
     "prettier": "^3.6.2",
     "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
     "wrangler": "^4.23.0"
   }
 }

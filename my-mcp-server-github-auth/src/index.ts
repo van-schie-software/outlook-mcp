@@ -4,6 +4,8 @@ import { McpAgent } from "agents/mcp";
 import { Octokit } from "octokit";
 import { z } from "zod";
 import { GitHubHandler } from "./github-handler";
+import { ZendeskClientWrapper } from "./zendesk-client";
+import { DurableObjectState } from "@cloudflare/workers-types";
 
 // Context from the auth process, encrypted & stored in the auth token
 // and provided to the DurableMCP as this.props
@@ -21,9 +23,15 @@ const ALLOWED_USERNAMES = new Set<string>([
 
 export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 	server = new McpServer({
-		name: "Github OAuth Proxy Demo",
+		name: "zendesk-mcp-server",
 		version: "1.0.0",
 	});
+	private zendeskClient: ZendeskClientWrapper;
+
+	constructor(state: DurableObjectState, env: Env, props: Props) {
+		super(state, env, props);
+		this.zendeskClient = new ZendeskClientWrapper(env);
+	}
 
 	async init() {
 		// Hello, world!
@@ -85,6 +93,119 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 				},
 			);
 		}
+
+		// Zendesk tools
+		this.server.tool(
+			"zendesk/get_ticket",
+			"Get details of a specific Zendesk ticket",
+			{ id: z.number().describe("The ticket ID") },
+			async ({ id }) => {
+				if (!id) {
+					throw new Error("Ticket ID is required");
+				}
+				const ticket = await this.zendeskClient.get_ticket(id);
+				return {
+					content: [{
+						type: "text",
+						text: `Ticket #${ticket.id}: ${ticket.subject}\n\nDescription: ${ticket.description}\n\nStatus: ${ticket.status}\nPriority: ${ticket.priority}\nCreated: ${ticket.created_at}\nUpdated: ${ticket.updated_at}`
+					}]
+				};
+			}
+		);
+
+		this.server.tool(
+			"zendesk/get_ticket_comments",
+			"Get all comments for a specific Zendesk ticket",
+			{ ticket_id: z.number().describe("The ticket ID") },
+			async ({ ticket_id }) => {
+				const comments = await this.zendeskClient.get_ticket_comments(ticket_id);
+				const formattedComments = comments.map(comment => 
+					`Comment #${comment.id}:\nPublic: ${comment.public ? 'Yes' : 'No'}\nCreated: ${comment.created_at}\n\n${comment.body}`
+				).join('\n\n---\n\n');
+				return {
+					content: [{
+						type: "text",
+						text: formattedComments || "No comments found"
+					}]
+				};
+			}
+		);
+
+		this.server.tool(
+			"zendesk/create_ticket_comment",
+			"Add a comment to a Zendesk ticket",
+			{ 
+				ticket_id: z.number().describe("The ticket ID"),
+				body: z.string().describe("The comment body"),
+				public: z.boolean().default(false).describe("Whether the comment should be public")
+			},
+			async ({ ticket_id, body, public: isPublic }) => {
+				await this.zendeskClient.create_ticket_comment(ticket_id, body, isPublic);
+				return {
+					content: [{
+						type: "text",
+						text: "Comment added successfully"
+					}]
+				};
+			}
+		);
+
+		this.server.tool(
+			"zendesk/search_knowledge_base",
+			"Search the Zendesk knowledge base for articles",
+			{ query: z.string().describe("Search query") },
+			async ({ query }) => {
+				const knowledgeBase = await this.zendeskClient.getKnowledgeBase();
+				const searchLower = query.toLowerCase();
+				
+				const matchingArticles = [];
+				for (const section of knowledgeBase) {
+					for (const article of section.articles) {
+						if (article.title.toLowerCase().includes(searchLower) || 
+							article.body.toLowerCase().includes(searchLower)) {
+							matchingArticles.push({
+								section: section.name,
+								title: article.title,
+								body: article.body
+							});
+						}
+					}
+				}
+				
+				if (matchingArticles.length === 0) {
+					return {
+						content: [{
+							type: "text",
+							text: "No articles found matching your search query"
+						}]
+					};
+				}
+				
+				const formattedArticles = matchingArticles.map(article => 
+					`Section: ${article.section}\nTitle: ${article.title}\n\n${article.body}`
+				).join('\n\n---\n\n');
+				
+				return {
+					content: [{
+						type: "text",
+						text: formattedArticles
+					}]
+				};
+			}
+		);
+	}
+
+	async fetch(request: Request): Promise<Response> {
+		if (request.method === "GET") {
+			return new Response(JSON.stringify({
+				name: "zendesk-mcp-server",
+				version: "1.0.0",
+				description: "MCP server for Zendesk integration"
+			}), {
+				headers: { "Content-Type": "application/json" }
+			});
+		}
+		return super.fetch(request);
 	}
 }
 
