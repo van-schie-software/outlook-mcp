@@ -85,5 +85,15 @@
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
-	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+        // "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+,
+    "env": {
+        "dev": {
+            "secrets": [
+                "ZENDESK_SUBDOMAIN",
+                "ZENDESK_EMAIL",
+                "ZENDESK_API_KEY"
+            ]
+        }
+    }
 }

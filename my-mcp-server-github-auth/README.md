@@ -138,3 +138,22 @@ The MCP Remote library enables your server to expose tools that can be invoked b
 - Provides a structured way to define tools
 - Handles serialization and deserialization of requests and responses
 - Maintains the Server-Sent Events (SSE) connection between clients and your server
+
+### Zendesk Integration
+
+This project also exposes several Zendesk tools and prompts.
+
+**Tools**
+
+- `zendesk/get_ticket` – Retrieve a ticket by ID. `{ id: number }`
+- `zendesk/get_ticket_comments` – List comments for a ticket. `{ id: number }`
+- `zendesk/create_ticket_comment` – Add a comment to a ticket. `{ id: number, comment: string, public?: boolean }`
+
+**Prompts**
+
+- `zendesk/analyze-ticket` – Analyze a ticket. `{ ticket_id: number }`
+- `zendesk/draft-ticket-response` – Draft a ticket response. `{ ticket_id: number }`
+
+**Resource**
+
+- `zendesk://knowledge-base` – JSON dump of Help Center articles.
