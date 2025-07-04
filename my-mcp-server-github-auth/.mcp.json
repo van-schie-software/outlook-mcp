@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zendesk-github-mcp": {
+      "type": "sse",
+      "url": "http://localhost:65387/sse"
+    }
+  }
+}

@@ -1,29 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ZendeskClientWrapper } from './zendesk-client';
 
-// Maak van tevoren mock-functies aan voor elke methode die we gaan aanroepen.
-const mockShowTicket = vi.fn();
-const mockGetComments = vi.fn();
-const mockUpdateTicket = vi.fn();
-const mockListSections = vi.fn();
-const mockListArticles = vi.fn();
+// Mock the global fetch function
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
 
-// Vertel Vitest: "Elke keer als code 'node-zendesk' importeert, geef dan DIT object terug."
-vi.mock('node-zendesk', () => ({
-  default: {
-    createClient: vi.fn(() => ({
-      tickets: {
-        show: mockShowTicket,
-        getComments: mockGetComments,
-        update: mockUpdateTicket,
-      },
-      helpcenter: {
-        sections: { list: mockListSections },
-        articles: { listBySection: mockListArticles },
-      },
-    })),
-  }
-}));
+// Mock btoa for base64 encoding
+global.btoa = (str: string) => Buffer.from(str).toString('base64');
 
 // Een dummy 'env' object voor de constructor van onze wrapper.
 const env = {
@@ -35,6 +18,7 @@ const env = {
 // Zorg ervoor dat de mocks schoon zijn voor elke afzonderlijke test.
 beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
 });
 
 describe('ZendeskClientWrapper', () => {
@@ -42,7 +26,7 @@ describe('ZendeskClientWrapper', () => {
     it('should correctly call the Zendesk API and format the ticket data', async () => {
       // --- ARRANGE ---
       const mockApiResponse = { 
-        result: { 
+        ticket: { 
           id: 123, 
           subject: 'Help!', 
           description: 'It is broken.',
@@ -52,30 +36,42 @@ describe('ZendeskClientWrapper', () => {
           updated_at: '2024-01-02T00:00:00Z'
         } 
       };
-      mockShowTicket.mockResolvedValue(mockApiResponse);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockApiResponse,
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
       const ticket = await client.get_ticket(123);
 
       // --- ASSERT ---
-      expect(mockShowTicket).toHaveBeenCalledTimes(1);
-      expect(mockShowTicket).toHaveBeenCalledWith(123);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-subdomain.zendesk.com/api/v2/tickets/123.json',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': expect.stringContaining('Basic'),
+          })
+        })
+      );
       expect(ticket.subject).toBe('Help!');
       expect(ticket.description).toBe('It is broken.');
       expect(ticket.priority).toBe('high');
       expect(ticket.status).toBe('open');
-      // Test ook of je mapping werkt: overbodige velden moeten er niet zijn.
-      expect(ticket).not.toHaveProperty('result'); 
     });
 
     it('should handle API errors gracefully', async () => {
       // --- ARRANGE ---
-      mockShowTicket.mockRejectedValue(new Error('API Error'));
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: async () => 'Ticket not found',
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT & ASSERT ---
-      await expect(client.get_ticket(123)).rejects.toThrow('API Error');
+      await expect(client.get_ticket(123)).rejects.toThrow('Zendesk API error (404): Ticket not found');
     });
   });
 
@@ -83,20 +79,26 @@ describe('ZendeskClientWrapper', () => {
     it('should fetch and format ticket comments correctly', async () => {
       // --- ARRANGE ---
       const mockApiResponse = {
-        result: [
+        comments: [
           { id: 1, body: 'First comment', public: true, created_at: '2024-01-01T00:00:00Z' },
           { id: 2, body: 'Second comment', public: false, created_at: '2024-01-02T00:00:00Z' }
         ]
       };
-      mockGetComments.mockResolvedValue(mockApiResponse);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockApiResponse,
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
       const comments = await client.get_ticket_comments(456);
 
       // --- ASSERT ---
-      expect(mockGetComments).toHaveBeenCalledTimes(1);
-      expect(mockGetComments).toHaveBeenCalledWith(456);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-subdomain.zendesk.com/api/v2/tickets/456/comments.json',
+        expect.any(Object)
+      );
       expect(comments).toHaveLength(2);
       expect(comments[0].body).toBe('First comment');
       expect(comments[1].public).toBe(false);
@@ -106,63 +108,101 @@ describe('ZendeskClientWrapper', () => {
   describe('create_ticket_comment', () => {
     it('should correctly call the update API when creating a public comment', async () => {
       // --- ARRANGE ---
-      mockUpdateTicket.mockResolvedValue({ result: 'ok' });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ result: 'ok' }),
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
       await client.create_ticket_comment(456, 'This is a public comment', true);
 
       // --- ASSERT ---
-      expect(mockUpdateTicket).toHaveBeenCalledTimes(1);
-      expect(mockUpdateTicket).toHaveBeenCalledWith(456, {
-        ticket: { comment: { body: 'This is a public comment', public: true } },
-      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-subdomain.zendesk.com/api/v2/tickets/456.json',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            ticket: { comment: { body: 'This is a public comment', public: true } },
+          })
+        })
+      );
     });
 
     it('should correctly call the update API when creating a private comment', async () => {
       // --- ARRANGE ---
-      mockUpdateTicket.mockResolvedValue({ result: 'ok' });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ result: 'ok' }),
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
       await client.create_ticket_comment(789, 'Internal note', false);
 
       // --- ASSERT ---
-      expect(mockUpdateTicket).toHaveBeenCalledTimes(1);
-      expect(mockUpdateTicket).toHaveBeenCalledWith(789, {
-        ticket: { comment: { body: 'Internal note', public: false } },
-      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-subdomain.zendesk.com/api/v2/tickets/789.json',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            ticket: { comment: { body: 'Internal note', public: false } },
+          })
+        })
+      );
     });
   });
 
   describe('getKnowledgeBase', () => {
     it('should fetch and format knowledge base articles correctly', async () => {
       // --- ARRANGE ---
-      mockListSections.mockResolvedValue([
-        { id: 1, name: 'General', position: 1 },
-        { id: 2, name: 'Technical', position: 2 }
-      ]);
-      mockListArticles.mockImplementation((sectionId) => {
-        if (sectionId === 1) {
-          return Promise.resolve([
-            { id: 101, title: 'How to restart', body: 'Press the button...', position: 1 }
-          ]);
-        } else {
-          return Promise.resolve([
-            { id: 201, title: 'API Guide', body: 'Use the API...', position: 1 }
-          ]);
-        }
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            sections: [
+              { id: 1, name: 'General', position: 1 },
+              { id: 2, name: 'Technical', position: 2 }
+            ]
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            articles: [
+              { id: 101, title: 'How to restart', body: 'Press the button...', position: 1 }
+            ]
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            articles: [
+              { id: 201, title: 'API Guide', body: 'Use the API...', position: 1 }
+            ]
+          }),
+        });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
       const knowledgeBase = await client.getKnowledgeBase();
 
       // --- ASSERT ---
-      expect(mockListSections).toHaveBeenCalledTimes(1);
-      expect(mockListArticles).toHaveBeenCalledTimes(2);
-      expect(mockListArticles).toHaveBeenCalledWith(1);
-      expect(mockListArticles).toHaveBeenCalledWith(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).toHaveBeenNthCalledWith(1,
+        'https://test-subdomain.zendesk.com/api/v2/help_center/sections.json',
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(2,
+        'https://test-subdomain.zendesk.com/api/v2/help_center/sections/1/articles.json',
+        expect.any(Object)
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(3,
+        'https://test-subdomain.zendesk.com/api/v2/help_center/sections/2/articles.json',
+        expect.any(Object)
+      );
       
       expect(knowledgeBase).toHaveLength(2);
       expect(knowledgeBase[0].name).toBe('General');
@@ -176,8 +216,15 @@ describe('ZendeskClientWrapper', () => {
 
     it('should cache the knowledge base after the first call', async () => {
       // --- ARRANGE ---
-      mockListSections.mockResolvedValue([{ id: 1, name: 'General' }]);
-      mockListArticles.mockResolvedValue([{ id: 101, title: 'How to restart' }]);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ sections: [{ id: 1, name: 'General' }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ articles: [{ id: 101, title: 'How to restart' }] }),
+        });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
@@ -186,14 +233,16 @@ describe('ZendeskClientWrapper', () => {
       await client.getKnowledgeBase(); // Derde aanroep ook
 
       // --- ASSERT ---
-      // De daadwerkelijke API-aanroepen zouden maar ÉÉN keer mogen zijn gedaan.
-      expect(mockListSections).toHaveBeenCalledTimes(1);
-      expect(mockListArticles).toHaveBeenCalledTimes(1);
+      // De daadwerkelijke API-aanroepen zouden maar 2 keer mogen zijn gedaan (sections + articles).
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('should handle empty sections gracefully', async () => {
       // --- ARRANGE ---
-      mockListSections.mockResolvedValue([]);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ sections: [] }),
+      });
       const client = new ZendeskClientWrapper(env);
 
       // --- ACT ---
@@ -201,7 +250,7 @@ describe('ZendeskClientWrapper', () => {
 
       // --- ASSERT ---
       expect(knowledgeBase).toEqual([]);
-      expect(mockListArticles).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(1); // Only sections call, no articles
     });
   });
 

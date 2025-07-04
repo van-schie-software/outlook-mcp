@@ -1,5 +1,3 @@
-import zendesk from 'node-zendesk';
-
 interface ZendeskEnv {
   ZENDESK_SUBDOMAIN: string;
   ZENDESK_EMAIL: string;
@@ -38,7 +36,8 @@ export interface ZendeskSection {
 }
 
 export class ZendeskClientWrapper {
-  private client: any;
+  private baseUrl: string;
+  public authHeader: string; // Made public for testing
   private knowledgeBaseCache: ZendeskSection[] | null = null;
 
   constructor(env: ZendeskEnv) {
@@ -47,31 +46,67 @@ export class ZendeskClientWrapper {
       throw new Error('Missing required Zendesk configuration');
     }
 
-    this.client = zendesk.createClient({
-      username: env.ZENDESK_EMAIL,
-      token: env.ZENDESK_API_KEY,
-      remoteUri: `https://${env.ZENDESK_SUBDOMAIN}.zendesk.com/api/v2`,
+    this.baseUrl = `https://${env.ZENDESK_SUBDOMAIN}.zendesk.com/api/v2`;
+    // Create base64 encoded auth string for Basic Auth
+    // For API token auth, format is: email/token:api_token
+    const authString = `${env.ZENDESK_EMAIL}/token:${env.ZENDESK_API_KEY}`;
+    this.authHeader = `Basic ${btoa(authString)}`;
+    
+    // Debug logging
+    console.log('Zendesk client initialized with subdomain:', env.ZENDESK_SUBDOMAIN);
+    console.log('Using email:', env.ZENDESK_EMAIL);
+    console.log('Auth string (before encoding):', authString);
+    console.log('API key length:', env.ZENDESK_API_KEY.length);
+    console.log('Base64 encoded auth header:', this.authHeader);
+  }
+
+  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    console.log('Making request to:', url);
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': this.authHeader,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options.headers,
+      },
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Zendesk API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: url,
+        error: errorText
+      });
+      throw new Error(`Zendesk API error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
   }
 
   async get_ticket(ticketId: number): Promise<ZendeskTicket> {
-    const response = await this.client.tickets.show(ticketId);
-    const ticket = response.result;
+    const data = await this.makeRequest(`/tickets/${ticketId}.json`);
+    const ticket = data.ticket;
     
     return {
       id: ticket.id,
       subject: ticket.subject,
       description: ticket.description,
       status: ticket.status,
-      priority: ticket.priority,
+      priority: ticket.priority || 'normal',
       created_at: ticket.created_at,
       updated_at: ticket.updated_at,
     };
   }
 
   async get_ticket_comments(ticketId: number): Promise<ZendeskComment[]> {
-    const response = await this.client.tickets.getComments(ticketId);
-    const comments = response.result;
+    const data = await this.makeRequest(`/tickets/${ticketId}/comments.json`);
+    const comments = data.comments || [];
     
     return comments.map((comment: any) => ({
       id: comment.id,
@@ -82,13 +117,16 @@ export class ZendeskClientWrapper {
   }
 
   async create_ticket_comment(ticketId: number, body: string, isPublic: boolean = false): Promise<void> {
-    await this.client.tickets.update(ticketId, {
-      ticket: {
-        comment: {
-          body: body,
-          public: isPublic,
+    await this.makeRequest(`/tickets/${ticketId}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ticket: {
+          comment: {
+            body: body,
+            public: isPublic,
+          },
         },
-      },
+      }),
     });
   }
 
@@ -98,31 +136,48 @@ export class ZendeskClientWrapper {
       return this.knowledgeBaseCache;
     }
 
-    // Fetch sections
-    const sections = await this.client.helpcenter.sections.list();
-    
-    // Fetch articles for each section
-    const sectionsWithArticles = await Promise.all(
-      sections.map(async (section: any) => {
-        const articles = await this.client.helpcenter.articles.listBySection(section.id);
-        
-        return {
-          id: section.id,
-          name: section.name,
-          position: section.position,
-          articles: articles.map((article: any) => ({
-            id: article.id,
-            title: article.title,
-            body: article.body,
-            position: article.position,
-          })),
-        };
-      })
-    );
+    try {
+      // Fetch sections from help center
+      const sectionsData = await this.makeRequest('/help_center/sections.json');
+      const sections = sectionsData.sections || [];
+      
+      // Fetch articles for each section
+      const sectionsWithArticles = await Promise.all(
+        sections.map(async (section: any) => {
+          try {
+            const articlesData = await this.makeRequest(`/help_center/sections/${section.id}/articles.json`);
+            const articles = articlesData.articles || [];
+            
+            return {
+              id: section.id,
+              name: section.name,
+              position: section.position,
+              articles: articles.map((article: any) => ({
+                id: article.id,
+                title: article.title,
+                body: article.body,
+                position: article.position,
+              })),
+            };
+          } catch (error) {
+            console.error(`Failed to fetch articles for section ${section.id}:`, error);
+            return {
+              id: section.id,
+              name: section.name,
+              position: section.position,
+              articles: [],
+            };
+          }
+        })
+      );
 
-    // Cache the result
-    this.knowledgeBaseCache = sectionsWithArticles;
-    
-    return sectionsWithArticles;
+      // Cache the result
+      this.knowledgeBaseCache = sectionsWithArticles;
+      
+      return sectionsWithArticles;
+    } catch (error) {
+      console.error('Failed to fetch knowledge base:', error);
+      return [];
+    }
   }
 }

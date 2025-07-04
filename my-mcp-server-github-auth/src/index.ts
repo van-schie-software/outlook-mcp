@@ -26,14 +26,22 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 		name: "zendesk-mcp-server",
 		version: "1.0.0",
 	});
-	private zendeskClient: ZendeskClientWrapper;
+	private zendeskClient: ZendeskClientWrapper | null = null;
 
 	constructor(state: DurableObjectState, env: Env, props: Props) {
 		super(state, env, props);
-		this.zendeskClient = new ZendeskClientWrapper(env);
+	}
+
+	private getZendeskClient(): ZendeskClientWrapper {
+		if (!this.zendeskClient) {
+			this.zendeskClient = new ZendeskClientWrapper(this.env);
+		}
+		return this.zendeskClient;
 	}
 
 	async init() {
+		console.log("MyMCP init() called");
+		
 		// Hello, world!
 		this.server.tool(
 			"add",
@@ -96,14 +104,58 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 
 		// Zendesk tools
 		this.server.tool(
-			"zendesk/get_ticket",
+			"zendesk_test_auth",
+			"Test Zendesk authentication by getting current user",
+			{},
+			async () => {
+				try {
+					const client = this.getZendeskClient();
+					// Test with users/me endpoint which should work with any valid auth
+					const response = await fetch(`https://${this.env.ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/users/me.json`, {
+						headers: {
+							'Authorization': client.authHeader,
+							'Content-Type': 'application/json',
+							'Accept': 'application/json',
+						},
+					});
+					
+					if (!response.ok) {
+						const errorText = await response.text();
+						return {
+							content: [{
+								type: "text",
+								text: `Auth test failed (${response.status}): ${errorText}`
+							}]
+						};
+					}
+					
+					const data = await response.json() as any;
+					return {
+						content: [{
+							type: "text",
+							text: `Auth test successful! User: ${data.user?.name} (${data.user?.email})`
+						}]
+					};
+				} catch (error) {
+					return {
+						content: [{
+							type: "text",
+							text: `Auth test error: ${error instanceof Error ? error.message : String(error)}`
+						}]
+					};
+				}
+			}
+		);
+
+		this.server.tool(
+			"zendesk_get_ticket",
 			"Get details of a specific Zendesk ticket",
 			{ id: z.number().describe("The ticket ID") },
 			async ({ id }) => {
 				if (!id) {
 					throw new Error("Ticket ID is required");
 				}
-				const ticket = await this.zendeskClient.get_ticket(id);
+				const ticket = await this.getZendeskClient().get_ticket(id);
 				return {
 					content: [{
 						type: "text",
@@ -114,11 +166,11 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 		);
 
 		this.server.tool(
-			"zendesk/get_ticket_comments",
+			"zendesk_get_ticket_comments",
 			"Get all comments for a specific Zendesk ticket",
 			{ ticket_id: z.number().describe("The ticket ID") },
 			async ({ ticket_id }) => {
-				const comments = await this.zendeskClient.get_ticket_comments(ticket_id);
+				const comments = await this.getZendeskClient().get_ticket_comments(ticket_id);
 				const formattedComments = comments.map(comment => 
 					`Comment #${comment.id}:\nPublic: ${comment.public ? 'Yes' : 'No'}\nCreated: ${comment.created_at}\n\n${comment.body}`
 				).join('\n\n---\n\n');
@@ -132,7 +184,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 		);
 
 		this.server.tool(
-			"zendesk/create_ticket_comment",
+			"zendesk_create_ticket_comment",
 			"Add a comment to a Zendesk ticket",
 			{ 
 				ticket_id: z.number().describe("The ticket ID"),
@@ -140,7 +192,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 				public: z.boolean().default(false).describe("Whether the comment should be public")
 			},
 			async ({ ticket_id, body, public: isPublic }) => {
-				await this.zendeskClient.create_ticket_comment(ticket_id, body, isPublic);
+				await this.getZendeskClient().create_ticket_comment(ticket_id, body, isPublic);
 				return {
 					content: [{
 						type: "text",
@@ -151,11 +203,11 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 		);
 
 		this.server.tool(
-			"zendesk/search_knowledge_base",
+			"zendesk_search_knowledge_base",
 			"Search the Zendesk knowledge base for articles",
 			{ query: z.string().describe("Search query") },
 			async ({ query }) => {
-				const knowledgeBase = await this.zendeskClient.getKnowledgeBase();
+				const knowledgeBase = await this.getZendeskClient().getKnowledgeBase();
 				const searchLower = query.toLowerCase();
 				
 				const matchingArticles = [];
@@ -196,16 +248,24 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 	}
 
 	async fetch(request: Request): Promise<Response> {
-		if (request.method === "GET") {
-			return new Response(JSON.stringify({
-				name: "zendesk-mcp-server",
-				version: "1.0.0",
-				description: "MCP server for Zendesk integration"
-			}), {
-				headers: { "Content-Type": "application/json" }
-			});
+		try {
+			console.log(`MyMCP fetch() called: ${request.method} ${request.url}`);
+			
+			if (request.method === "GET" && !request.url.includes("/sse")) {
+				return new Response(JSON.stringify({
+					name: "zendesk-mcp-server",
+					version: "1.0.0",
+					description: "MCP server for Zendesk integration"
+				}), {
+					headers: { "Content-Type": "application/json" }
+				});
+			}
+			
+			return super.fetch(request);
+		} catch (error) {
+			console.error("Error in MyMCP fetch():", error);
+			throw error;
 		}
-		return super.fetch(request);
 	}
 }
 
