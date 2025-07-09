@@ -28,17 +28,22 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
+          cache-dependency-path: 'src/package-lock.json'
 
       - name: Install dependencies
+        working-directory: ./src
         run: npm ci
 
       - name: Run type checking
+        working-directory: ./src
         run: npm run type-check || true
 
       - name: Run tests
+        working-directory: ./src
         run: npm test
 
       - name: Generate coverage report
+        working-directory: ./src
         run: npm run test:coverage
         
       - name: Upload coverage reports
@@ -47,7 +52,7 @@ jobs:
         if: matrix.node-version == 20  # Only upload once
         with:
           name: coverage-report
-          path: coverage/
+          path: src/coverage/
           retention-days: 7
 
       - name: Comment test results

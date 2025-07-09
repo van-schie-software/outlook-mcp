@@ -26,26 +26,32 @@ jobs:
           node-version: 20
           # Cache npm dependencies for faster builds
           cache: 'npm'
+          cache-dependency-path: 'src/package-lock.json'
 
       - name: Install dependencies
         # Use npm ci for faster and more reliable installs in CI
+        working-directory: ./src
         run: npm ci
 
       - name: Run linting
         # Optional: Add linting step if you have it configured
+        working-directory: ./src
         run: npm run type-check || true
 
       - name: Run tests
         # This step must pass for deployment to proceed
+        working-directory: ./src
         run: npm test
         
       - name: Generate test coverage report
         # Optional: Generate and display coverage statistics
+        working-directory: ./src
         run: npm run test:coverage || true
 
       - name: Deploy to Cloudflare Workers
         # Only runs if all previous steps succeed
         # Uses wrangler to deploy to Cloudflare
+        working-directory: ./src
         run: npx wrangler deploy
         env:
           # API token is stored as a GitHub secret
