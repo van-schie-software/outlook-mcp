@@ -1,6 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MyMCP } from './index';
 import { DurableObjectState } from '@cloudflare/workers-types';
+
+// Mock cloudflare imports before importing MyMCP
+vi.mock('cloudflare:workers', () => ({
+  DurableObject: class DurableObject {},
+}));
+
+vi.mock('agents/mcp', () => ({
+  McpAgent: class McpAgent {
+    constructor(state: any, env: any, props: any) {}
+  },
+}));
+
+vi.mock('@cloudflare/workers-oauth-provider', () => ({
+  default: class OAuthProvider {},
+}));
+
+vi.mock('octokit', () => ({
+  Octokit: class Octokit {
+    constructor(options: any) {}
+    rest = {
+      users: {
+        getAuthenticated: vi.fn(),
+      },
+    };
+  },
+}));
+
+vi.mock('./github-handler', () => ({
+  GitHubHandler: class GitHubHandler {},
+}));
+
+// Import MyMCP after mocks are set up
+import { MyMCP } from './index';
 
 // Mock all Zendesk client methods
 const mockZendeskGetTicket = vi.fn();
@@ -19,6 +51,14 @@ const mockZendeskSearch = vi.fn();
 const mockZendeskSearchTickets = vi.fn();
 const mockZendeskMergeTickets = vi.fn();
 const mockZendeskCreateManyTickets = vi.fn();
+const mockZendeskUpdateManyTickets = vi.fn();
+const mockZendeskGetGroup = vi.fn();
+const mockZendeskListGroups = vi.fn();
+const mockZendeskListViews = vi.fn();
+const mockZendeskExecuteView = vi.fn();
+const mockZendeskListOrganizations = vi.fn();
+const mockZendeskGetOrganization = vi.fn();
+const mockZendeskCreateOrganization = vi.fn();
 
 vi.mock('./zendesk-client', () => ({
   ZendeskClientWrapper: vi.fn().mockImplementation(() => ({
@@ -38,6 +78,14 @@ vi.mock('./zendesk-client', () => ({
     search_tickets: mockZendeskSearchTickets,
     merge_tickets: mockZendeskMergeTickets,
     create_many_tickets: mockZendeskCreateManyTickets,
+    update_many_tickets: mockZendeskUpdateManyTickets,
+    get_group: mockZendeskGetGroup,
+    list_groups: mockZendeskListGroups,
+    list_views: mockZendeskListViews,
+    execute_view: mockZendeskExecuteView,
+    list_organizations: mockZendeskListOrganizations,
+    get_organization: mockZendeskGetOrganization,
+    create_organization: mockZendeskCreateOrganization,
   })),
 }));
 
@@ -348,6 +396,258 @@ describe('MyMCP Zendesk Integration', () => {
       expect(response.status).toBe(200);
       expect(data.name).toBe('zendesk-mcp-server');
       expect(data.version).toBe('1.0.0');
+    });
+  });
+
+  describe('zendesk_create_ticket tool', () => {
+    it('should create a new ticket with all parameters', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskCreateTicket.mockResolvedValue({
+        id: 999,
+        subject: 'New issue',
+        status: 'new',
+        priority: 'high',
+      });
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_create_ticket', 
+        arguments: {
+          subject: 'New issue',
+          description: 'This is a new issue',
+          priority: 'high',
+          assignee_id: 123,
+          tags: ['urgent', 'bug']
+        } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskCreateTicket).toHaveBeenCalledWith({
+        subject: 'New issue',
+        description: 'This is a new issue',
+        priority: 'high',
+        assignee_id: 123,
+        tags: ['urgent', 'bug']
+      });
+      expect(result.content[0].text).toContain('Ticket created successfully');
+      expect(result.content[0].text).toContain('ID: 999');
+    });
+  });
+
+  describe('zendesk_update_ticket tool', () => {
+    it('should update an existing ticket', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskUpdateTicket.mockResolvedValue({
+        id: 123,
+        subject: 'Updated issue',
+        status: 'solved',
+        priority: 'low',
+      });
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_update_ticket', 
+        arguments: {
+          ticket_id: 123,
+          status: 'solved',
+          priority: 'low'
+        } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskUpdateTicket).toHaveBeenCalledWith(123, {
+        status: 'solved',
+        priority: 'low'
+      });
+      expect(result.content[0].text).toContain('Ticket updated successfully');
+    });
+  });
+
+  describe('zendesk_list_tickets tool', () => {
+    it('should list tickets with filters', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskListTickets.mockResolvedValue([
+        { id: 1, subject: 'Open ticket 1', status: 'open' },
+        { id: 2, subject: 'Open ticket 2', status: 'open' }
+      ]);
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_list_tickets', 
+        arguments: { status: 'open' } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskListTickets).toHaveBeenCalledWith({ status: 'open' });
+      expect(result.content[0].text).toContain('Found 2 tickets');
+      expect(result.content[0].text).toContain('Open ticket 1');
+      expect(result.content[0].text).toContain('Open ticket 2');
+    });
+  });
+
+  describe('zendesk_search tool', () => {
+    it('should perform search with query', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskSearch.mockResolvedValue({
+        results: [
+          { id: 1, subject: 'Found ticket', type: 'ticket' },
+          { id: 2, name: 'Found user', type: 'user' }
+        ],
+        count: 2
+      });
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_search', 
+        arguments: { query: 'test query' } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskSearch).toHaveBeenCalledWith('test query');
+      expect(result.content[0].text).toContain('Found 2 results');
+    });
+  });
+
+  describe('zendesk_create_user tool', () => {
+    it('should create a new user', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskCreateUser.mockResolvedValue({
+        id: 555,
+        name: 'New User',
+        email: 'newuser@example.com',
+        role: 'end-user'
+      });
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_create_user', 
+        arguments: {
+          name: 'New User',
+          email: 'newuser@example.com',
+          role: 'end-user'
+        } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskCreateUser).toHaveBeenCalledWith({
+        name: 'New User',
+        email: 'newuser@example.com',
+        role: 'end-user'
+      });
+      expect(result.content[0].text).toContain('User created successfully');
+      expect(result.content[0].text).toContain('ID: 555');
+    });
+  });
+
+  describe('zendesk_list_organizations tool', () => {
+    it('should list all organizations', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskListOrganizations.mockResolvedValue([
+        { id: 1, name: 'Org 1', domain_names: ['org1.com'] },
+        { id: 2, name: 'Org 2', domain_names: ['org2.com'] }
+      ]);
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_list_organizations', 
+        arguments: {} 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskListOrganizations).toHaveBeenCalled();
+      expect(result.content[0].text).toContain('Found 2 organizations');
+      expect(result.content[0].text).toContain('Org 1');
+      expect(result.content[0].text).toContain('org1.com');
+    });
+  });
+
+  describe('zendesk_list_views tool', () => {
+    it('should list all views', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskListViews.mockResolvedValue([
+        { id: 1, title: 'Open tickets', active: true },
+        { id: 2, title: 'Pending tickets', active: true }
+      ]);
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_list_views', 
+        arguments: {} 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskListViews).toHaveBeenCalled();
+      expect(result.content[0].text).toContain('Found 2 views');
+      expect(result.content[0].text).toContain('Open tickets');
+    });
+  });
+
+  describe('zendesk_execute_view tool', () => {
+    it('should execute a view and return tickets', async () => {
+      // --- ARRANGE ---
+      const mcpServer = new MyMCP(mockState, dummyEnv, dummyProps);
+      await mcpServer.init();
+      
+      mockZendeskExecuteView.mockResolvedValue([
+        { id: 100, subject: 'View ticket 1', status: 'open' },
+        { id: 101, subject: 'View ticket 2', status: 'open' }
+      ]);
+
+      const handlerConfig = mockSetRequestHandler.mock.calls[0][0];
+      const callToolHandler = handlerConfig.callTool;
+
+      // --- ACT ---
+      const result = await callToolHandler({ 
+        name: 'zendesk_execute_view', 
+        arguments: { view_id: 360001234567 } 
+      });
+
+      // --- ASSERT ---
+      expect(mockZendeskExecuteView).toHaveBeenCalledWith(360001234567);
+      expect(result.content[0].text).toContain('Found 2 tickets');
+      expect(result.content[0].text).toContain('View ticket 1');
     });
   });
 });

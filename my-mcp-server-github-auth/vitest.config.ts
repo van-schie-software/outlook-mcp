@@ -4,8 +4,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // Skip integration tests for now
-    exclude: ['**/node_modules/**', '**/index.test.ts'],
+    // Include all tests
+    exclude: ['**/node_modules/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
