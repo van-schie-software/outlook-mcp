@@ -2,11 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MyMCP } from './index';
 import { DurableObjectState } from '@cloudflare/workers-types';
 
-// Mock de HELE zendesk-client module
+// Mock all Zendesk client methods
 const mockZendeskGetTicket = vi.fn();
 const mockZendeskGetComments = vi.fn();
 const mockZendeskCreateComment = vi.fn();
 const mockZendeskGetKnowledgeBase = vi.fn();
+const mockZendeskCreateTicket = vi.fn();
+const mockZendeskUpdateTicket = vi.fn();
+const mockZendeskDeleteTicket = vi.fn();
+const mockZendeskListTickets = vi.fn();
+const mockZendeskListUsers = vi.fn();
+const mockZendeskGetUser = vi.fn();
+const mockZendeskCreateUser = vi.fn();
+const mockZendeskSuspendUser = vi.fn();
+const mockZendeskSearch = vi.fn();
+const mockZendeskSearchTickets = vi.fn();
+const mockZendeskMergeTickets = vi.fn();
+const mockZendeskCreateManyTickets = vi.fn();
 
 vi.mock('./zendesk-client', () => ({
   ZendeskClientWrapper: vi.fn().mockImplementation(() => ({
@@ -14,6 +26,18 @@ vi.mock('./zendesk-client', () => ({
     get_ticket_comments: mockZendeskGetComments,
     create_ticket_comment: mockZendeskCreateComment,
     getKnowledgeBase: mockZendeskGetKnowledgeBase,
+    create_ticket: mockZendeskCreateTicket,
+    update_ticket: mockZendeskUpdateTicket,
+    delete_ticket: mockZendeskDeleteTicket,
+    list_tickets: mockZendeskListTickets,
+    list_users: mockZendeskListUsers,
+    get_user: mockZendeskGetUser,
+    create_user: mockZendeskCreateUser,
+    suspend_user: mockZendeskSuspendUser,
+    search: mockZendeskSearch,
+    search_tickets: mockZendeskSearchTickets,
+    merge_tickets: mockZendeskMergeTickets,
+    create_many_tickets: mockZendeskCreateManyTickets,
   })),
 }));
 
