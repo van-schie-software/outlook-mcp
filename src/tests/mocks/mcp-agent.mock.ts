@@ -1,6 +1,6 @@
 // tests/mocks/mcp-agent.mock.ts
 import { vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // Mock implementation of DurableObjectState
 export const mockState = {
@@ -8,7 +8,19 @@ export const mockState = {
     get: vi.fn(),
     put: vi.fn(),
   },
-};
+  waitUntil: vi.fn(),
+  id: { toString: () => 'test-id', equals: vi.fn() },
+  blockConcurrencyWhile: vi.fn(),
+  acceptWebSocket: vi.fn(),
+  getAlarm: vi.fn(),
+  setAlarm: vi.fn(),
+  deleteAlarm: vi.fn(),
+  getWebSockets: vi.fn(),
+  getTags: vi.fn(),
+  ctx: {},
+  abort: vi.fn(),
+  aborted: vi.fn(),
+} as any;
 
 // Mock implementation of Props
 export const mockProps = {
@@ -26,7 +38,18 @@ export const mockEnv = {
   AI: {
     run: vi.fn(),
   },
-};
+  OAUTH_KV: {
+    get: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    list: vi.fn(),
+  } as any,
+  GITHUB_OAUTH_REDIRECT_URL: 'http://test.com/callback',
+  GITHUB_CLIENT_ID: 'test-client-id',
+  GITHUB_CLIENT_SECRET: 'test-client-secret',
+  ZENDESK_OAUTH_REDIRECT_URL: 'http://test.com/zendesk/callback',
+  ZENDESK_OAUTH_CLIENT_ID: 'test-zendesk-client-id',
+} as any;
 
 // We definiëren een simpele mock-versie van McpAgent
 // die de Cloudflare-specifieke types niet nodig heeft.

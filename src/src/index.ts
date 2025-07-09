@@ -28,7 +28,8 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 	});
 	private zendeskClient: ZendeskClientWrapper | null = null;
 
-	constructor(state: DurableObjectState, env: Env, props: Props) {
+	constructor(state: DurableObjectState, env: Env, props?: Props) {
+		// @ts-ignore - McpAgent might accept 2 or 3 parameters depending on version
 		super(state, env, props);
 	}
 

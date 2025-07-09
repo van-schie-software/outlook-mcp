@@ -66,14 +66,20 @@ const testEnv = {
   ZENDESK_API_KEY: 'test-api-key',
 };
 
+// Define the tool context type
+interface ToolContext {
+  getZendeskClient: () => typeof mockZendeskClient;
+  env: typeof testEnv;
+}
+
 // Helper to create a tool handler context
-const createContext = () => ({
+const createContext = (): ToolContext => ({
   getZendeskClient: () => mockZendeskClient,
   env: testEnv,
 });
 
 // Helper to define a tool (mimicking the server.tool method)
-const defineTool = (name: string, description: string, schema: any, handler: Function) => ({
+const defineTool = <TInput = any>(name: string, description: string, schema: any, handler: (this: ToolContext, input: TInput) => Promise<any>) => ({
   name,
   description,
   inputSchema: schema,
@@ -105,7 +111,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk/get_ticket',
           'Get a specific Zendesk ticket by ID',
           { id: z.number().describe('The ticket ID') },
-          async function({ id }: { id: number }) {
+          async function(this: ToolContext, { id }: { id: number }) {
             const ticket = await this.getZendeskClient().get_ticket(id);
             return {
               content: [{
@@ -134,7 +140,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk/get_ticket',
           'Get a specific Zendesk ticket by ID',
           { id: z.number() },
-          async function({ id }: { id: number }) {
+          async function(this: ToolContext, { id }: { id: number }) {
             try {
               const ticket = await this.getZendeskClient().get_ticket(id);
               return { content: [{ type: 'text', text: `Ticket: ${ticket.subject}` }] };
@@ -178,7 +184,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
             description: z.string().optional(),
             priority: z.string().optional(),
           },
-          async function(ticketData: any) {
+          async function(this: ToolContext, ticketData: any) {
             const ticket = await this.getZendeskClient().create_ticket(ticketData);
             return {
               content: [{
@@ -220,7 +226,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk_list_tickets',
           'List Zendesk tickets',
           { status: z.string().optional() },
-          async function(filters: any) {
+          async function(this: ToolContext, filters: any) {
             const tickets = await this.getZendeskClient().list_tickets(filters);
             if (tickets.length === 0) {
               return { content: [{ type: 'text', text: 'No tickets found' }] };
@@ -257,7 +263,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk_list_tickets',
           'List Zendesk tickets',
           {},
-          async function() {
+          async function(this: ToolContext) {
             const tickets = await this.getZendeskClient().list_tickets();
             if (tickets.length === 0) {
               return { content: [{ type: 'text', text: 'No tickets found' }] };
@@ -289,7 +295,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk_list_users',
           'List all Zendesk users',
           {},
-          async function() {
+          async function(this: ToolContext) {
             const users = await this.getZendeskClient().list_users();
             const usersList = users
               .map((u: any) => `- ${u.name} (${u.email}) - ${u.role}`)
@@ -333,7 +339,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
             email: z.string(),
             role: z.string().optional(),
           },
-          async function(userData: any) {
+          async function(this: ToolContext, userData: any) {
             const user = await this.getZendeskClient().create_user(userData);
             return {
               content: [{
@@ -380,7 +386,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk_search',
           'Search across Zendesk',
           { query: z.string() },
-          async function({ query }: { query: string }) {
+          async function(this: ToolContext, { query }: { query: string }) {
             const results = await this.getZendeskClient().search(query);
             if (results.count === 0) {
               return { content: [{ type: 'text', text: 'No results found' }] };
@@ -419,7 +425,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk_list_organizations',
           'List all organizations',
           {},
-          async function() {
+          async function(this: ToolContext) {
             const orgs = await this.getZendeskClient().list_organizations();
             const orgsList = orgs
               .map((o: any) => `- ${o.name} (${o.domain_names.join(', ')})`)
@@ -465,7 +471,7 @@ describe('Zendesk MCP Tools - Integration Tests', () => {
           'zendesk/search_knowledge_base',
           'Search knowledge base',
           { query: z.string() },
-          async function({ query }: { query: string }) {
+          async function(this: ToolContext, { query }: { query: string }) {
             const sections = await this.getZendeskClient().getKnowledgeBase();
             const results: any[] = [];
             
