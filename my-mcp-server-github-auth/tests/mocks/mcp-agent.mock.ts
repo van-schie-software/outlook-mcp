@@ -1,6 +1,6 @@
 // tests/mocks/mcp-agent.mock.ts
+import { vi } from 'vitest';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { z } from 'zod';
 
 // Mock implementation of DurableObjectState
 export const mockState = {
@@ -65,7 +65,7 @@ export class MockMcpAgent {
   }
 
   // Mock fetch method (for HTTP handling)
-  async fetch(request: Request): Promise<Response> {
+  async fetch(_request: Request): Promise<Response> {
     return new Response(JSON.stringify({
       name: 'zendesk-mcp-server',
       version: '1.0.0',

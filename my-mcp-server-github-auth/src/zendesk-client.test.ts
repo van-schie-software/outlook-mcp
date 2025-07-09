@@ -230,6 +230,23 @@ describe('ZendeskClientWrapper', () => {
         'Zendesk API Error (500): Internal Server Error'
       );
     });
+
+    it('should handle network failures', async () => {
+      // Mock a network error
+      const networkError = new Error('Network request failed');
+      (global.fetch as any).mockRejectedValueOnce(networkError);
+
+      // Verify that the method passes through the original error
+      await expect(client.get_ticket(99999)).rejects.toThrow('Network request failed');
+    });
+
+    it('should handle timeout errors', async () => {
+      // Mock a timeout error
+      const timeoutError = new Error('Request timeout');
+      (global.fetch as any).mockRejectedValueOnce(timeoutError);
+
+      await expect(client.list_tickets()).rejects.toThrow('Request timeout');
+    });
   });
 
   describe('Bulk operations', () => {
@@ -1159,4 +1176,82 @@ describe('ZendeskClientWrapper', () => {
 
   // Note: Help Center methods (list_articles, get_article, list_sections, list_categories) 
   // are not implemented in the current ZendeskClientWrapper
+
+  describe('Edge Cases and Input Validation', () => {
+    describe('Empty Results', () => {
+      it('should handle empty ticket list gracefully', async () => {
+        (global.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ tickets: [] })
+        });
+
+        const result = await client.list_tickets();
+        expect(result).toEqual([]);
+      });
+
+      it('should handle null/undefined fields in API response', async () => {
+        const ticketWithNulls = {
+          id: 123,
+          subject: 'Test',
+          description: null,
+          status: 'open',
+          priority: undefined,
+          created_at: '2024-01-01',
+          updated_at: null
+        };
+
+        (global.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ticket: ticketWithNulls })
+        });
+
+        const result = await client.get_ticket(123);
+        expect(result.priority).toBe('normal'); // Should default to 'normal'
+        expect(result.description).toBeDefined(); // Should handle null gracefully
+      });
+    });
+
+    describe('Search with Special Characters', () => {
+      it('should properly encode special characters in search queries', async () => {
+        const specialQuery = 'test & query "with quotes" <brackets>';
+        
+        (global.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ results: [], count: 0 })
+        });
+
+        await client.search(specialQuery);
+
+        const expectedUrl = `https://test-subdomain.zendesk.com/api/v2/search.json?query=${encodeURIComponent(specialQuery)}`;
+        expect(global.fetch).toHaveBeenCalledWith(expectedUrl, expect.any(Object));
+      });
+    });
+
+    describe('Bulk Operations Edge Cases', () => {
+      it('should handle empty array in bulk create', async () => {
+        (global.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ job_status: { id: 'job123', status: 'completed' } })
+        });
+
+        const result = await client.create_many_tickets([]);
+        
+        const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+        expect(callBody.tickets).toEqual([]);
+        expect(result.job_status).toBeDefined();
+      });
+
+      it('should handle very large ticket IDs', async () => {
+        const largeId = 999999999999;
+        
+        (global.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ticket: { id: largeId, subject: 'Test' } })
+        });
+
+        const result = await client.get_ticket(largeId);
+        expect(result.id).toBe(largeId);
+      });
+    });
+  });
 });

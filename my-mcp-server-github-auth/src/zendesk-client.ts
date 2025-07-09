@@ -121,17 +121,13 @@ export class ZendeskClientWrapper {
     this.authHeader = `Basic ${btoa(authString)}`;
     
     // Debug logging
-    console.log('Zendesk client initialized with subdomain:', env.ZENDESK_SUBDOMAIN);
-    console.log('Using email:', env.ZENDESK_EMAIL);
-    console.log('Auth string (before encoding):', authString);
-    console.log('API key length:', env.ZENDESK_API_KEY.length);
-    console.log('Base64 encoded auth header:', this.authHeader);
+    // Authentication is set up with email/token:api_key format
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
     
-    console.log('Making request to:', url);
+    // Making authenticated request to Zendesk API
     
     const response = await fetch(url, {
       ...options,
