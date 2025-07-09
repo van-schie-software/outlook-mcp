@@ -1,169 +1,145 @@
 # Deployment Guide
 
-This guide explains how to deploy the Zendesk MCP Server to Cloudflare Workers using GitHub Actions.
+This guide explains how to set up automated deployment for the Zendesk MCP Server.
 
 ## Prerequisites
 
 1. A Cloudflare account with Workers enabled
-2. A GitHub repository with Actions enabled
-3. Zendesk API credentials
-4. GitHub OAuth App credentials
+2. A GitHub repository with admin access
+3. Cloudflare API tokens configured
 
-## GitHub Secrets Configuration
+## Setting up GitHub Secrets
 
-You need to configure the following secrets in your GitHub repository settings:
+The automated deployment requires the following secrets to be configured in your GitHub repository:
 
-### Cloudflare Secrets
+### Required Secrets
 
 1. **CLOUDFLARE_API_TOKEN**
    - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
-   - Create a new API token with "Edit Workers" permissions
-   - Copy the token and add it as a secret
+   - Click "Create Token"
+   - Use the "Edit Cloudflare Workers" template
+   - Set permissions:
+     - Account: Cloudflare Workers Scripts:Edit
+     - Zone: Workers Routes:Edit (if using custom domains)
+   - Copy the generated token
 
-2. **CLOUDFLARE_ACCOUNT_ID**
+2. **CLOUDFLARE_ACCOUNT_ID** (Optional but recommended)
    - Find your account ID in the Cloudflare dashboard
-   - Usually visible in the right sidebar of your Workers dashboard
+   - Right sidebar under "Account ID"
 
-### Production Environment Secrets
+### Setting Secrets in GitHub
 
-3. **ZENDESK_SUBDOMAIN**
-   - Your Zendesk subdomain (e.g., "yourcompany" from yourcompany.zendesk.com)
-
-4. **ZENDESK_EMAIL**
-   - The email address associated with your Zendesk API key
-
-5. **ZENDESK_API_KEY**
-   - Your Zendesk API key
-   - Generate from: Zendesk Admin → API → Settings
-
-6. **GITHUB_CLIENT_ID**
-   - From your GitHub OAuth App settings
-
-7. **GITHUB_CLIENT_SECRET**
-   - From your GitHub OAuth App settings
-
-8. **GITHUB_REDIRECT_URL**
-   - The callback URL for your GitHub OAuth App
-   - Should be: `https://your-worker.workers.dev/authorize`
-
-### Staging Environment Secrets (Optional)
-
-For staging deployments, prefix each secret with `STAGING_`:
-- STAGING_ZENDESK_SUBDOMAIN
-- STAGING_ZENDESK_EMAIL
-- STAGING_ZENDESK_API_KEY
-- STAGING_GITHUB_CLIENT_ID
-- STAGING_GITHUB_CLIENT_SECRET
-- STAGING_GITHUB_REDIRECT_URL
+1. Navigate to your repository on GitHub
+2. Go to Settings → Secrets and variables → Actions
+3. Click "New repository secret"
+4. Add each secret with its corresponding value
 
 ## Deployment Workflows
 
-### Production Deployment
+### Automatic Deployment (main branch)
 
-The production deployment workflow (`deploy.yml`) runs automatically when:
-- Code is pushed to the `main` branch
-- Manually triggered via GitHub Actions UI
+Every push to the `main` branch triggers:
+1. Code checkout
+2. Dependency installation
+3. Type checking
+4. Test execution
+5. Coverage report generation
+6. Deployment to Cloudflare Workers (only if tests pass)
 
-Steps performed:
-1. Checkout code
-2. Install dependencies
-3. Run tests
-4. Type check
-5. Deploy to Cloudflare Workers
+### Pull Request Testing
 
-### Staging Deployment
-
-The staging deployment workflow (`deploy-staging.yml`) runs automatically when:
-- A pull request is opened or updated
-
-Steps performed:
-1. Same as production, but deploys to staging environment
-2. Comments on the PR with deployment status
+Pull requests automatically run:
+1. Tests on Node.js 18 and 20
+2. Type checking
+3. Coverage report generation
 
 ## Manual Deployment
 
-To deploy manually from your local machine:
-
-```bash
-# Set environment variables
-export CLOUDFLARE_API_TOKEN="your-token"
-export CLOUDFLARE_ACCOUNT_ID="your-account-id"
-
-# Deploy to production
-npm run deploy
-
-# Deploy to staging
-npm run deploy -- --env staging
-```
-
-## Wrangler Configuration
-
-For staging deployments, add this to your `wrangler.jsonc`:
-
-```jsonc
-{
-  "name": "zendesk-mcp-server",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-02-11",
-  // ... other config ...
-  
-  "environments": {
-    "staging": {
-      "name": "zendesk-mcp-server-staging",
-      "vars": {
-        // Staging-specific variables
-      }
-    }
-  }
-}
-```
+You can manually trigger a deployment:
+1. Go to Actions tab in GitHub
+2. Select "Test and Deploy to Cloudflare Workers"
+3. Click "Run workflow"
+4. Select branch and click "Run workflow"
 
 ## Monitoring Deployments
 
-1. **GitHub Actions**: Check the Actions tab in your repository
-2. **Cloudflare Dashboard**: Monitor your Workers in the Cloudflare dashboard
-3. **Worker Logs**: Use `wrangler tail` to stream logs
+### GitHub Actions
 
-## Rollback
+- Check the Actions tab for workflow runs
+- Green checkmark = successful deployment
+- Red X = failed deployment (check logs)
+
+### Cloudflare Dashboard
+
+- Visit [Cloudflare Workers Dashboard](https://dash.cloudflare.com/?to=/:account/workers)
+- Check your worker's status and metrics
+- View real-time logs and errors
+
+## Rollback Procedure
 
 If a deployment causes issues:
 
-1. **Via GitHub**: Revert the commit and push to main
-2. **Via Cloudflare**: Use the Workers dashboard to rollback to a previous version
-3. **Emergency**: Disable the Worker in Cloudflare dashboard
+1. **Quick Rollback via Cloudflare:**
+   ```bash
+   # List deployments
+   npx wrangler deployments list
+   
+   # Rollback to previous version
+   npx wrangler rollback [deployment-id]
+   ```
 
-## Security Best Practices
+2. **Git Revert:**
+   ```bash
+   # Revert the problematic commit
+   git revert [commit-hash]
+   git push origin main
+   ```
 
-1. **Rotate secrets regularly**
-2. **Use different credentials for staging and production**
-3. **Limit API token permissions to minimum required**
-4. **Enable 2FA on all accounts**
-5. **Review deployment logs regularly**
+## Environment-Specific Configuration
+
+### Development
+- Uses `.dev.vars` for local secrets
+- Runs on `localhost:8788`
+
+### Production
+- Uses GitHub Secrets for sensitive data
+- Deploys to `*.workers.dev` domain
 
 ## Troubleshooting
 
-### Deployment Fails
+### Common Issues
 
-1. Check GitHub Actions logs for error messages
-2. Verify all secrets are set correctly
-3. Ensure wrangler.jsonc is valid
-4. Check Cloudflare API token permissions
+1. **"Authentication error" during deployment**
+   - Check CLOUDFLARE_API_TOKEN is correctly set
+   - Ensure token has proper permissions
 
-### Worker Not Responding
+2. **"Script not found" error**
+   - Verify wrangler.toml configuration
+   - Check that build output exists
 
-1. Check Worker logs: `wrangler tail`
-2. Verify environment variables are set
-3. Check for runtime errors in Cloudflare dashboard
+3. **Tests failing in CI but passing locally**
+   - Check Node.js version compatibility
+   - Ensure all dependencies are in package.json
+   - Verify environment variables
 
-### Authentication Issues
+### Debug Steps
 
-1. Verify GitHub OAuth App settings
-2. Check redirect URLs match exactly
-3. Ensure secrets are not expired
+1. Check GitHub Actions logs
+2. Verify secrets are set correctly
+3. Test deployment locally with `npx wrangler deploy --dry-run`
+4. Check Cloudflare Workers logs for runtime errors
 
-## Support
+## Security Best Practices
 
-For issues specific to:
-- **Cloudflare Workers**: [Cloudflare Community](https://community.cloudflare.com)
-- **GitHub Actions**: [GitHub Community](https://github.community)
-- **This project**: Open an issue in the repository
+1. Never commit secrets to the repository
+2. Use least-privilege API tokens
+3. Regularly rotate API tokens
+4. Monitor deployment logs for sensitive data
+5. Use branch protection rules on `main`
+
+## Cost Considerations
+
+Cloudflare Workers pricing:
+- First 100,000 requests/day free
+- Monitor usage in Cloudflare dashboard
+- Set up billing alerts if needed

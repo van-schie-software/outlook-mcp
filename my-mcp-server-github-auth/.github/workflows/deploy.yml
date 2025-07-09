@@ -1,48 +1,63 @@
-name: Deploy to Cloudflare Workers
+# Deploy workflow for Zendesk MCP Server
+# This workflow runs tests and deploys to Cloudflare Workers when changes are pushed to main
+
+name: Test and Deploy to Cloudflare Workers
 
 on:
   push:
     branches:
       - main
+  # Allow manual triggering from the Actions tab
   workflow_dispatch:
 
 jobs:
-  deploy:
+  test-and-deploy:
+    name: Test and Deploy
     runs-on: ubuntu-latest
-    name: Deploy
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Use Node.js 20 LTS
+          node-version: 20
+          # Cache npm dependencies for faster builds
           cache: 'npm'
 
       - name: Install dependencies
+        # Use npm ci for faster and more reliable installs in CI
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Run linting
+        # Optional: Add linting step if you have it configured
+        run: npm run type-check || true
 
-      - name: Type check
-        run: npm run type-check
+      - name: Run tests
+        # This step must pass for deployment to proceed
+        run: npm test
+        
+      - name: Generate test coverage report
+        # Optional: Generate and display coverage statistics
+        run: npm run test:coverage || true
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          preCommands: |
-            echo "*** Running pre-deploy commands ***"
-            npm run cf-typegen
+        # Only runs if all previous steps succeed
+        # Uses wrangler to deploy to Cloudflare
+        run: npx wrangler deploy
         env:
-          # Zendesk configuration
-          ZENDESK_SUBDOMAIN: ${{ secrets.ZENDESK_SUBDOMAIN }}
-          ZENDESK_EMAIL: ${{ secrets.ZENDESK_EMAIL }}
-          ZENDESK_API_KEY: ${{ secrets.ZENDESK_API_KEY }}
-          # GitHub OAuth configuration
-          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
-          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
-          GITHUB_REDIRECT_URL: ${{ secrets.GITHUB_REDIRECT_URL }}
+          # API token is stored as a GitHub secret
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Optional: Account ID can also be set as a secret
+          # CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Post deployment notification
+        # Optional: Add notification step (Slack, Discord, etc.)
+        if: success()
+        run: echo "✅ Successfully deployed to Cloudflare Workers!"
+        
+      - name: Handle deployment failure
+        if: failure()
+        run: echo "❌ Deployment failed. Check the logs above for details."

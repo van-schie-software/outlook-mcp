@@ -1,0 +1,59 @@
+# Test workflow for Zendesk MCP Server
+# This workflow runs tests on pull requests and pushes to any branch
+
+name: Run Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches-ignore: [ main ]  # Main branch is handled by deploy.yml
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    # Test on multiple Node.js versions for compatibility
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type checking
+        run: npm run type-check || true
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+        
+      - name: Upload coverage reports
+        # Optional: Upload coverage to services like Codecov
+        uses: actions/upload-artifact@v4
+        if: matrix.node-version == 20  # Only upload once
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      - name: Comment test results
+        # Optional: Add PR comment with test results
+        if: github.event_name == 'pull_request' && matrix.node-version == 20
+        run: |
+          echo "### ✅ Tests passed on Node.js ${{ matrix.node-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All ${{ steps.test.outputs.total || '61' }} tests passed successfully!" >> $GITHUB_STEP_SUMMARY

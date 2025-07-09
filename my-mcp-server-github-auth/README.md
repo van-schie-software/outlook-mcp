@@ -1,5 +1,8 @@
 # Zendesk MCP Server
 
+[![Test and Deploy](https://github.com/van-schie-software/zendesk-mcp/actions/workflows/deploy.yml/badge.svg)](https://github.com/van-schie-software/zendesk-mcp/actions/workflows/deploy.yml)
+[![Tests](https://github.com/van-schie-software/zendesk-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/van-schie-software/zendesk-mcp/actions/workflows/test.yml)
+
 This is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that provides comprehensive Zendesk integration with GitHub OAuth authentication.
 
 The MCP server enables AI assistants to interact with Zendesk through a wide range of tools for managing tickets, users, organizations, and more. It's built on Cloudflare Workers and uses GitHub OAuth for secure authentication.
